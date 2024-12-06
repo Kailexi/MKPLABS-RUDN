@@ -2,114 +2,106 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def test_tochnost(E1, E2, tol):
-    """Проверка точности: если разница между E1 и E2 меньше точности, возвращает True."""
-    return abs(E1 - E2) <= tol
+def test_tochnost(E1, E2, tochnost):
+    """Проверка точности приближения эксцентрической аномалии."""
+    return abs(E1 - E2) <= tochnost
 
 
-def ekscentr_anom_iter(Ei, M, e, tol):
-    """Рекурсивное вычисление эксцентрической аномалии с методом последовательных приближений."""
+def ekscentr_anom_iter(Ei, M, e, tochnost):
+    """Итерационный метод для вычисления эксцентрической аномалии."""
     EI = Ei
     Ei = M + e * np.sin(EI)
 
-    if test_tochnost(Ei, EI, tol):
+    if test_tochnost(Ei, EI, tochnost):
         return Ei
     else:
-        return ekscentr_anom_iter(Ei, M, e, tol)
+        return ekscentr_anom_iter(Ei, M, e, tochnost)
 
 
-def true_anomaly(E, e):
-    """Вычисление истинной аномалии с дополнительной проверкой значений."""
-    try:
-        return np.pi + 2 * np.arctan(np.sqrt((1 + e) / (1 - e)) * np.tan((np.pi + E) / 2))
-    except:
-        # Возврат NaN, если возникли проблемы с вычислением
-        return np.nan
+# Вводные данные
+rp = float(input("Введите радиус перигея: "))
+ra = float(input("Введите радиус апогея: "))
+R = float(input("Введите радиус планеты: "))
+Mm = float(input("Введите массу планеты (например, 5.97): "))
+stepen = int(input("Введите степень массы планеты (например, 24 для 10^24): "))
+tochnost = float(input("Введите точность (например, 0.0001): "))
 
+Mm = Mm * 10 ** stepen  # Приведение массы к полному значению
 
-# Ввод параметров
-rp = float(input("Введите радиус перигея (км): "))
-ra = float(input("Введите радиус апогея (км): "))
-R = float(input("Введите радиус планеты (км): "))
-tol = float(input("Введите точность (например 0.0001): "))
-
-# Вычисление эксцентриситета
+# Расчёт эксцентриситета
 e = (ra - rp) / (ra + rp + R * 2)
-a = (ra + rp) / 2  # Большая полуось (среднее значение)
 
-# Гравитационный параметр Земли (км^3/с^2)
-mu = 398600
+# Константы
+G = 6.67428e-20  # Гравитационная постоянная (км³/кг/с²)
+p = 0.5 * (ra + rp + R * 2) * (1 - e ** 2)
 
-# Массивы для хранения данных
-time_values = []
-M_values = []
-E_values = []
-An_values = []
-r_values = []  # Радиус
-v_values = []  # Скорость
+# Временные параметры
+time_steps = 400
+time_values = np.linspace(0, 1, time_steps)
 
-# Генерация данных
-for t in np.linspace(0, 400, 401):
-    M = 2 * np.pi * (t / 400)  # Средняя аномалия
-    E = ekscentr_anom_iter(M, M, e, tol)  # Эксцентрическая аномалия
-    An = true_anomaly(E, e)  # Истинная аномалия
+# Списки для хранения данных
+M_values, E_values, An_values = [], [], []
+r_values, Vr_values, Vn_values, V_values = [], [], [], []
 
-    # Вычисление радиуса и скорости
-    r = a * (1 - e ** 2) / (1 + e * np.cos(E))  # Радиус
-    v = np.sqrt(mu * (2 / r - 1 / a))  # Скорость
+# Основной цикл по времени
+for t in time_values:
+    M = 2 * np.pi * t  # Средняя аномалия
+    E = ekscentr_anom_iter(M, M, e, tochnost)  # Эксцентрическая аномалия
 
-    # Добавление данных в списки
-    time_values.append(t)  # Время в секундах
-    M_values.append(M / np.pi)  # Нормализованная средняя аномалия
-    E_values.append(E / np.pi)  # Нормализованная эксцентрическая аномалия
-    An_values.append(An / np.pi)  # Нормализованная истинная аномалия
-    r_values.append(r)  # Радиус
-    v_values.append(v)  # Скорость
+    # Истинная аномалия через sin и cos
+    sin_An = np.sqrt(1 - e ** 2) * np.sin(E) / (1 - e * np.cos(E))
+    cos_An = (np.cos(E) - e) / (1 - e * np.cos(E))
+    An = np.arctan2(sin_An, cos_An)  # atan2 учитывает квадранты
 
-# Сохранение данных в файлы
-np.savetxt("T.txt", time_values)
-np.savetxt("M.txt", M_values)
-np.savetxt("E.txt", E_values)
-np.savetxt("An.txt", An_values)
-np.savetxt("r.txt", r_values)
-np.savetxt("v.txt", v_values)
+    # Приведение An к диапазону [0, 2π]
+    if An < 0:
+        An += 2 * np.pi
+
+    r = p / (1 + e * np.cos(An))  # Радиус орбиты
+    Vr = np.sqrt(G * Mm / p) * e * np.sin(An)  # Радиальная скорость
+    Vn = np.sqrt(G * Mm / p) * (1 + e * np.cos(An))  # Тангенциальная скорость
+    V = np.sqrt(Vn ** 2 + Vr ** 2)  # Полная скорость
+
+    # Сохранение данных
+    M_values.append(M / np.pi)
+    E_values.append(E / np.pi)
+    An_values.append(An / np.pi)
+    r_values.append(r)
+    Vr_values.append(Vr)
+    Vn_values.append(Vn)
+    V_values.append(V)
 
 # Построение графиков
-plt.figure(figsize=(12, 8))
 
-# График истинной аномалии
-plt.subplot(2, 2, 1)
-plt.plot(time_values, An_values, label="Истинная аномалия (An)", color="blue")
-plt.xlabel("Время (секунды)")
-plt.ylabel("Истинная аномалия (An)")
-plt.title("Зависимость истинной аномалии от времени")
+# График аномалий
+plt.figure(figsize=(10, 6))
+plt.plot(time_values, M_values, label='Средняя аномалия M(t)', color='b')
+plt.plot(time_values, E_values, label='Эксцентрическая аномалия E(t)', color='g')
+plt.plot(time_values, An_values, label='Истинная аномалия An(t)', color='r')
+plt.xlabel('Время (t)')
+plt.ylabel('Аномалия (в долях π)')
+plt.legend()
+plt.title('Зависимость аномалий от времени')
 plt.grid(True)
-
-# График эксцентрической аномалии
-plt.subplot(2, 2, 2)
-plt.plot(time_values, E_values, label="Эксцентрическая аномалия (E)", color="green")
-plt.xlabel("Время (секунды)")
-plt.ylabel("Эксцентрическая аномалия (E)")
-plt.title("Зависимость эксцентрической аномалии от времени")
-plt.grid(True)
+plt.show()
 
 # График радиуса
-plt.subplot(2, 2, 3)
-plt.plot(time_values, r_values, label="Радиус (r)", color="purple")
-plt.xlabel("Время (секунды)")
-plt.ylabel("Радиус (км)")
-plt.title("Зависимость радиуса от времени")
-plt.legend()
+plt.figure(figsize=(10, 6))
+plt.plot(time_values, r_values, label='Радиус r(t)', color='m')
+plt.xlabel('Время (t)')
+plt.ylabel('Радиус орбиты (км)')
+plt.title('Зависимость радиуса от времени')
 plt.grid(True)
+plt.show()
 
-# График скорости
-plt.subplot(2, 2, 4)
-plt.plot(time_values, v_values, label="Скорость (v)", color="orange")
-plt.xlabel("Время (секунды)")
-plt.ylabel("Скорость (км/с)")
-plt.title("Зависимость скорости от времени")
+# Графики скоростей
+plt.figure(figsize=(10, 6))
+plt.plot(time_values, Vr_values, label='Радиальная скорость Vr(t)', color='c')
+plt.plot(time_values, Vn_values, label='Тангенциальная скорость Vn(t)', color='y')
+plt.plot(time_values, V_values, label='Полная скорость V(t)', color='k')
+plt.xlabel('Время (t)')
+plt.ylabel('Скорость (км/с)')
 plt.legend()
+plt.title('Зависимость скоростей от времени')
 plt.grid(True)
-
-plt.tight_layout()
 plt.show()
