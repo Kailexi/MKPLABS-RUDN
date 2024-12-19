@@ -108,3 +108,4 @@ plt.legend()
 plt.title('Зависимость скоростей от времени')
 plt.grid(True)
 plt.show()
+

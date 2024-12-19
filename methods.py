@@ -66,6 +66,7 @@ def kepler_iteration_golden_section(M, e, a, b, tol, max_iter=1000):
 
 def kepler_iteration(M, e, a, b, x0, tol, max_iter=100):
 
+
     """
     Итерационный метод для нахождения корня уравнения Кеплера.
 

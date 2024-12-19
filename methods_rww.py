@@ -11,6 +11,7 @@ r_p_km = 6971  # Perigee, km
 r_a = r_a_km * 1e3
 r_p = r_p_km * 1e3
 
+
 # 1. Calculate semi-major axis and eccentricity
 a = (r_a + r_p) / 2  # Semi-major axis, m
 e = (r_a - r_p) / (r_a + r_p)  # Eccentricity
