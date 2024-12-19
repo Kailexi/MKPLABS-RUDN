@@ -1,22 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
 def test_tochnost(E1, E2, tochnost):
     """Проверка точности приближения эксцентрической аномалии."""
     return abs(E1 - E2) <= tochnost
 
-
-def ekscentr_anom_iter(Ei, M, e, tochnost):
-    """Итерационный метод для вычисления эксцентрической аномалии."""
-    EI = Ei
-    Ei = M + e * np.sin(EI)
-
-    if test_tochnost(Ei, EI, tochnost):
-        return Ei
-    else:
-        return ekscentr_anom_iter(Ei, M, e, tochnost)
-
+def ekscentr_anom_newton(M, e, tochnost):
+    """Метод Ньютона для вычисления эксцентрической аномалии."""
+    E = M  # начальное приближение
+    while True:
+        delta = (E - e * np.sin(E) - M) / (1 - e * np.cos(E))
+        E_new = E - delta
+        if test_tochnost(E_new, E, tochnost):
+            return E_new
+        E = E_new
 
 # Вводные данные
 rp = float(input("Введите радиус перигея: "))
@@ -43,10 +40,13 @@ time_values = np.linspace(0, 1, time_steps)
 M_values, E_values, An_values = [], [], []
 r_values, Vr_values, Vn_values, V_values = [], [], [], []
 
+# Общее время в часах (например, для полного периода 1 года)
+T_years = 365.25 * 24  # Время в часах для одного года
+
 # Основной цикл по времени
 for t in time_values:
     M = 2 * np.pi * t  # Средняя аномалия
-    E = ekscentr_anom_iter(M, M, e, tochnost)  # Эксцентрическая аномалия
+    E = ekscentr_anom_newton(M, e, tochnost)  # Эксцентрическая аномалия
 
     # Истинная аномалия через sin и cos
     sin_An = np.sqrt(1 - e ** 2) * np.sin(E) / (1 - e * np.cos(E))
@@ -71,14 +71,17 @@ for t in time_values:
     Vn_values.append(Vn)
     V_values.append(V)
 
+# Конвертируем нормализованное время в часы
+time_hours = time_values * T_years
+
 # Построение графиков
 
 # График аномалий
 plt.figure(figsize=(10, 6))
-plt.plot(time_values, M_values, label='Средняя аномалия M(t)', color='b')
-plt.plot(time_values, E_values, label='Эксцентрическая аномалия E(t)', color='g')
-plt.plot(time_values, An_values, label='Истинная аномалия An(t)', color='r')
-plt.xlabel('Время (t)')
+plt.plot(time_hours, M_values, label='Средняя аномалия M(t)', color='b')
+plt.plot(time_hours, E_values, label='Эксцентрическая аномалия E(t)', color='g')
+plt.plot(time_hours, An_values, label='Истинная аномалия An(t)', color='r')
+plt.xlabel('Время (часы)')
 plt.ylabel('Аномалия (в долях π)')
 plt.legend()
 plt.title('Зависимость аномалий от времени')
@@ -87,8 +90,8 @@ plt.show()
 
 # График радиуса
 plt.figure(figsize=(10, 6))
-plt.plot(time_values, r_values, label='Радиус r(t)', color='m')
-plt.xlabel('Время (t)')
+plt.plot(time_hours, r_values, label='Радиус r(t)', color='m')
+plt.xlabel('Время (часы)')
 plt.ylabel('Радиус орбиты (км)')
 plt.title('Зависимость радиуса от времени')
 plt.grid(True)
@@ -96,10 +99,10 @@ plt.show()
 
 # Графики скоростей
 plt.figure(figsize=(10, 6))
-plt.plot(time_values, Vr_values, label='Радиальная скорость Vr(t)', color='c')
-plt.plot(time_values, Vn_values, label='Тангенциальная скорость Vn(t)', color='y')
-plt.plot(time_values, V_values, label='Полная скорость V(t)', color='k')
-plt.xlabel('Время (t)')
+plt.plot(time_hours, Vr_values, label='Радиальная скорость Vr(t)', color='c')
+plt.plot(time_hours, Vn_values, label='Тангенциальная скорость Vn(t)', color='y')
+plt.plot(time_hours, V_values, label='Полная скорость V(t)', color='k')
+plt.xlabel('Время (часы)')
 plt.ylabel('Скорость (км/с)')
 plt.legend()
 plt.title('Зависимость скоростей от времени')
