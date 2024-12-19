@@ -1,105 +1,98 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Constants
-G = 6.67430e-11  # Gravitational constant, m^3/(kg·s^2)
-M_earth = 5.972e24  # Earth's mass, kg
-r_a_km = 46071  # Apogee, km
-r_p_km = 6971  # Perigee, km
+# Константы
+G = 6.67430e-11  # гравитационная постоянная (м^3/кг/с^2)
+M_Earth = 5.972e24  # масса Солнца (кг)
 
-# Convert distances from kilometers to meters
-r_a = r_a_km * 1e3
-r_p = r_p_km * 1e3
+# Орбитальные параметры
+r_a_km = 46071  # апоцентр (км)
+r_p_km = 6971  # перицентр (км)
+r_a = r_a_km * 1e3  # апоцентр в метрах
+r_p = r_p_km * 1e3  # перицентр в метрах
 
+# Полуось и эксцентриситет
+a = (r_a + r_p) / 2  # большая полуось
+e = (r_a - r_p) / (r_a + r_p)  # эксцентриситет
 
-# 1. Calculate semi-major axis and eccentricity
-a = (r_a + r_p) / 2  # Semi-major axis, m
-e = (r_a - r_p) / (r_a + r_p)  # Eccentricity
+# Среднее движение и период
+mu = G * M_Earth
+n = np.sqrt(mu / a**3)  # среднее движение
+T = 2 * np.pi / n  # орбитальный период
+time_intervals = np.linspace(0, T, 1000)  # временные интервалы
 
-# 2. Calculate mean motion and orbital period
-n = np.sqrt(G * M_earth / a**3)  # Mean motion, rad/s
-T = 2 * np.pi / n  # Orbital period, s
-T_days = T / (60 * 60 * 24)  # Orbital period in days
-
-# Time intervals from 0 to T with a smaller step of 1 minute (60 seconds)
-time_intervals = np.arange(0, T, 60)
-
-# Mean anomaly M for each time step
-M = n * time_intervals
-
-# Kepler's equation solvers
-def solve_kepler(M, e, tol=1e-6, max_iter=1000):
-    E = M  # Initial guess
-    for _ in range(max_iter):
-        delta_E = (M - (E - e * np.sin(E))) / (1 - e * np.cos(E))
-        E += delta_E
-        if abs(delta_E) < tol:
+# Метод Ньютона для решения уравнения Кеплера
+def newton_method(M, e, epsilon=1e-6, max_it=1000):
+    E = M
+    for _ in range(max_it):
+        f = E - e * np.sin(E) - M
+        df = 1 - e * np.cos(E)
+        dE = -f / df
+        E += dE
+        if abs(dE) < epsilon:
             break
     return E
 
-def iteration_method(M, e, tol=1e-6, max_iter=1000):
-    E = M  # Initial guess
-    for _ in range(max_iter):
-        E_new = M + e * np.sin(E)
-        if abs(E_new - E) < tol:
-            return E_new
-        E = E_new
-    return E
+# Расчет параметров орбиты
+def calculate_orbit_params(time_intervals, e, a, n, mu, epsilon=1e-6, max_it=1000):
+    p = a * (1 - e**2)  # фокальный параметр
+    r_values, Vr_values, Vt_values, V_values = [], [], [], []
+    for t in time_intervals:
+        M = n * t
+        E = newton_method(M, e, epsilon, max_it)
+        v = 2 * np.arctan(np.sqrt((1 + e) / (1 - e)) * np.tan(E / 2))
+        r = p / (1 + e * np.cos(v))
+        Vr = np.sqrt(mu / p) * e * np.sin(v)
+        Vt = np.sqrt(mu / p) * (1 + e * np.cos(v))
+        V = np.sqrt(Vr**2 + Vt**2)
+        r_values.append(r)
+        Vr_values.append(Vr)
+        Vt_values.append(Vt)
+        V_values.append(V)
+    return np.array(r_values), np.array(Vr_values), np.array(Vt_values), np.array(V_values)
 
-def bisection_method(M, e, tol=1e-6, max_iter=1000):
-    E_min, E_max = M - 2 * np.pi, M + 2 * np.pi
-    for _ in range(max_iter):
-        E_mid = (E_min + E_max) / 2
-        f_mid = E_mid - e * np.sin(E_mid) - M
-        if abs(f_mid) < tol:
-            return E_mid
-        if f_mid > 0:
-            E_max = E_mid
-        else:
-            E_min = E_mid
-    return (E_min + E_max) / 2
+# Выполнение расчетов
+r, Vr, Vt, V = calculate_orbit_params(time_intervals, e, a, n, mu)
 
-def golden_section_method(M, e, tol=1e-6, max_iter=1000):
-    phi = (1 + np.sqrt(5)) / 2  # Golden ratio
-    A = M - 2
-    B = M + 2
-    for _ in range(max_iter):
-        C = A + (B - A) / phi
-        f_C = C - e * np.sin(C) - M
-        if abs(f_C) < tol:
-            return C
-        if (A - e * np.sin(A) - M) * f_C < 0:
-            B = C
-        else:
-            A = C
-    return (A + B) / 2
+# Найдем максимальное и минимальное значение радиальной скорости
+Vr_max = np.max(Vr)
+Vr_min = np.min(Vr)
+V_at_Vr_max = V[np.argmax(Vr)]
+V_at_Vr_min = V[np.argmin(Vr)]
 
-# Methods for solving Kepler's equation
-methods = {
-    "Метод Ньютона": solve_kepler,
-    "Половинного Деления": bisection_method,
-    "Золотого Сечения": golden_section_method,
-    "Итераций": iteration_method,
-}
+# Найдем максимальное и минимальное значение трансверсальной скорости
+Vt_max = np.max(Vt)
+Vt_min = np.min(Vt)
+V_at_Vt_max = V[np.argmax(Vt)]
+V_at_Vt_min = V[np.argmin(Vt)]
 
-# Plot anomalies for each method
-for method_name, method in methods.items():
-    E_values = np.array([method(Mi, e) for Mi in M])
+# Результаты
+print(f"Максимальная радиальная скорость: {Vr_max / 1e3:.2f} км/с")
+print(f"Полная скорость при максимальной радиальной: {V_at_Vr_max / 1e3:.2f} км/с")
+print(f"Минимальная радиальная скорость: {Vr_min / 1e3:.2f} км/с")
+print(f"Полная скорость при минимальной радиальной: {V_at_Vr_min / 1e3:.2f} км/с")
+print(f"Максимальная трансверсальная скорость: {Vt_max / 1e3:.2f} км/с")
+print(f"Полная скорость при максимальной трансверсальной: {V_at_Vt_max / 1e3:.2f} км/с")
+print(f"Минимальная трансверсальная скорость: {Vt_min / 1e3:.2f} км/с")
+print(f"Полная скорость при минимальной трансверсальной: {V_at_Vt_min / 1e3:.2f} км/с")
 
-    # True anomaly (v) from eccentric anomaly (E)
-    v_values = 2 * np.arctan(np.sqrt((1 + e) / (1 - e)) * np.tan(E_values / 2))
-    v_values = np.where(v_values < 0, v_values + 2 * np.pi, v_values)
+# Построение графиков
+plt.figure(figsize=(10, 6))
+plt.plot(time_intervals / 3600, r, label='Радиус-вектор (м)')
+plt.title('Радиус-вектор объекта')
+plt.xlabel('Время (часы)')
+plt.ylabel('Радиус-вектор (м)')
+plt.grid(True)
+plt.legend()
+plt.show()
 
-    # Plotting
-    plt.figure(figsize=(12, 8))
-    plt.plot(time_intervals / (60 * 60), M, label='Средняя Аномалия (M)', color='red', linewidth=1.5)
-    plt.plot(time_intervals / (60 * 60), E_values, label='Эксцентрическая Аномалия (E)', color='green', linewidth=1.5)
-    plt.plot(time_intervals / (60 * 60), v_values, label='Истинная Аномалия (v)', color='blue', linewidth=1.5)
-
-    plt.title(f'Аномалии для метода:  {method_name}', fontsize=14)
-    plt.xlabel('Время (часы)', fontsize=12)
-    plt.ylabel('Аномалия (радианы)', fontsize=12)
-    plt.grid(True, which='both', linestyle='--', linewidth=0.7)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+plt.figure(figsize=(10, 6))
+plt.plot(time_intervals / 3600, Vr / 1e3, label='Радиальная скорость (км/с)')
+plt.plot(time_intervals / 3600, Vt / 1e3, label='Трансверсальная скорость (км/с)')
+plt.plot(time_intervals / 3600, V / 1e3, label='Полная скорость (км/с)')
+plt.title('Скорости объекта')
+plt.xlabel('Время (часы)')
+plt.ylabel('Скорость (км/с)')
+plt.grid(True)
+plt.legend()
+plt.show()

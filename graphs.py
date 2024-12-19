@@ -1,133 +1,126 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
-
-def test_tochnost(E1, E2, tochnost):
-    """Проверка точности приближения эксцентрической аномалии."""
-    return abs(E1 - E2) <= tochnost
-
-
-def ekscentr_anom_newton(M, e, tochnost):
-    """Метод Ньютона для вычисления эксцентрической аномалии."""
-    E = M  # начальное приближение
-    while True:
-        delta = (E - e * np.sin(E) - M) / (1 - e * np.cos(E))
-        E_new = E - delta
-        if test_tochnost(E_new, E, tochnost):
-            return E_new
-        E = E_new
-
-
-# Вводные данные
-rp = float(input("Введите радиус перигея: "))
-ra = float(input("Введите радиус апогея: "))
-R = float(input("Введите радиус планеты: "))
-Mm = float(input("Введите массу планеты (например, 5.97): "))
-stepen = int(input("Введите степень массы планеты (например, 24 для 10^24): "))
-tochnost = float(input("Введите точность (например, 0.0001): "))
-
-Mm = Mm * 10 ** stepen  # Приведение массы к полному значению
-
-# Расчёт эксцентриситета
-e = (ra - rp) / (ra + rp + R * 2)
+import csv
 
 # Константы
-G = 6.67428e-20  # Гравитационная постоянная (км³/кг/с²)
-p = 0.5 * (ra + rp + R * 2) * (1 - e ** 2)
+G = 6.67430e-11  # гравитационная постоянная (м^3/кг/с^2)
 
-# Временные параметры
-time_steps = 400
-T_years = 365.25 * 24 * 3600  # Полный период в секундах
-time_values = np.linspace(0, T_years, time_steps)
+# Ввод параметров
+M_Earth = float(input("Введите массу Земли (кг): "))  # масса Земли (кг)
+r_a_km = float(input("Введите радиус апоцентра (км): "))  # апоцентр (км)
+r_p_km = float(input("Введите радиус перицентра (км): "))  # перицентр (км)
 
-# Списки для хранения данных
-M_values, E_values, An_values = [], [], []
-r_values, Vr_values, Vn_values, V_values = [], [], [], []
+r_a = r_a_km * 1e3  # апоцентр в метрах
+r_p = r_p_km * 1e3  # перицентр в метрах
 
-# Открытие файла для записи данных
-with open("orbital_data.csv", "w") as file:
-    # Запись заголовков
-    file.write("Time (s),Vr (km/s),Vn (km/s),V (km/s)\n")
+# Полуось и эксцентриситет
+a = (r_a + r_p) / 2  # большая полуось
+e = (r_a - r_p) / (r_a + r_p)  # эксцентриситет
 
-    # Основной цикл по времени
-    for t in time_values:
-        M = 2 * np.pi * t / T_years  # Средняя аномалия
-        E = ekscentr_anom_newton(M, e, tochnost)  # Эксцентрическая аномалия
+# Среднее движение и период
+mu = G * M_Earth
+n = np.sqrt(mu / a ** 3)  # среднее движение
+T = 2 * np.pi / n  # орбитальный период
+time_intervals = np.linspace(0, T, 1000)  # временные интервалы
 
-        # Истинная аномалия через sin и cos
-        sin_An = np.sqrt(1 - e ** 2) * np.sin(E) / (1 - e * np.cos(E))
-        cos_An = (np.cos(E) - e) / (1 - e * np.cos(E))
-        An = np.arctan2(sin_An, cos_An)  # atan2 учитывает квадранты
 
-        # Приведение An к диапазону [0, 2π]
-        if An < 0:
-            An += 2 * np.pi
+# Метод Ньютона для решения уравнения Кеплера
+def newton_method(M, e, epsilon=1e-6, max_it=1000):
+    E = M
+    for _ in range(max_it):
+        f = E - e * np.sin(E) - M
+        df = 1 - e * np.cos(E)
+        dE = -f / df
+        E += dE
+        if abs(dE) < epsilon:
+            break
+    return E
 
-        r = p / (1 + e * np.cos(An))  # Радиус орбиты
-        Vr = np.sqrt(G * Mm / p) * e * np.sin(An)  # Радиальная скорость
-        Vn = np.sqrt(G * Mm / p) * (1 + e * np.cos(An))  # Тангенциальная скорость
-        V = np.sqrt(Vn ** 2 + Vr ** 2)  # Полная скорость
 
-        # Сохранение данных
-        M_values.append(M / np.pi)
-        E_values.append(E / np.pi)
-        An_values.append(An / np.pi)
+# Расчет параметров орбиты
+def calculate_orbit_params(time_intervals, e, a, n, mu, epsilon=1e-6, max_it=1000):
+    p = a * (1 - e ** 2)  # фокальный параметр
+    r_values, Vr_values, Vt_values, V_values = [], [], [], []
+    for t in time_intervals:
+        M = n * t
+        E = newton_method(M, e, epsilon, max_it)
+        v = 2 * np.arctan(np.sqrt((1 + e) / (1 - e)) * np.tan(E / 2))
+        r = p / (1 + e * np.cos(v))
+        Vr = np.sqrt(mu / p) * e * np.sin(v)
+        Vt = np.sqrt(mu / p) * (1 + e * np.cos(v))
+        V = np.sqrt(Vr ** 2 + Vt ** 2)
         r_values.append(r)
         Vr_values.append(Vr)
-        Vn_values.append(Vn)
+        Vt_values.append(Vt)
         V_values.append(V)
+    return np.array(r_values), np.array(Vr_values), np.array(Vt_values), np.array(V_values)
 
-        # Запись данных в файл
-        file.write(f"{t},{Vr},{Vn},{V}\n")
 
-# Вычисление экстремумов
-Vr_min = min(Vr_values)
-Vr_max = max(Vr_values)
-Vr_min_t = time_values[Vr_values.index(Vr_min)]
-Vr_max_t = time_values[Vr_values.index(Vr_max)]
+# Выполнение расчетов
+r, Vr, Vt, V = calculate_orbit_params(time_intervals, e, a, n, mu)
 
-Vn_min = min(Vn_values)
-Vn_max = max(Vn_values)
-Vn_min_t = time_values[Vn_values.index(Vn_min)]
-Vn_max_t = time_values[Vn_values.index(Vn_max)]
+# Найдем максимальное и минимальное значение радиальной скорости
+Vr_max = np.max(Vr)
+Vr_min = np.min(Vr)
+V_at_Vr_max = V[np.argmax(Vr)]
+V_at_Vr_min = V[np.argmin(Vr)]
 
-# Вывод результатов экстремумов
-print(f"Vr_min: {Vr_min:.4f} км/с при t = {Vr_min_t:.2f} секунд")
-print(f"Vr_max: {Vr_max:.4f} км/с при t = {Vr_max_t:.2f} секунд")
-print(f"Vn_min: {Vn_min:.4f} км/с при t = {Vn_min_t:.2f} секунд")
-print(f"Vn_max: {Vn_max:.4f} км/с при t = {Vn_max_t:.2f} секунд")
+# Найдем максимальное и минимальное значение трансверсальной скорости
+Vt_max = np.max(Vt)
+Vt_min = np.min(Vt)
+V_at_Vt_max = V[np.argmax(Vt)]
+V_at_Vt_min = V[np.argmin(Vt)]
+
+# Найдем максимальный и минимальный радиус
+R_max = np.max(r)
+R_min = np.min(r)
+
+# Результаты
+print(f"Максимальный радиус: {R_max / 1e3:.2f} км")
+print(f"Минимальный радиус: {R_min / 1e3:.2f} км")
+print(f"Максимальная радиальная скорость: {Vr_max / 1e3:.2f} км/с")
+print(f"Полная скорость при максимальной радиальной: {V_at_Vr_max / 1e3:.2f} км/с")
+print(f"Минимальная радиальная скорость: {Vr_min / 1e3:.2f} км/с")
+print(f"Полная скорость при минимальной радиальной: {V_at_Vr_min / 1e3:.2f} км/с")
+print(f"Максимальная трансверсальная скорость: {Vt_max / 1e3:.2f} км/с")
+print(f"Полная скорость при максимальной трансверсальной: {V_at_Vt_max / 1e3:.2f} км/с")
+print(f"Минимальная трансверсальная скорость: {Vt_min / 1e3:.2f} км/с")
+print(f"Полная скорость при минимальной трансверсальной: {V_at_Vt_min / 1e3:.2f} км/с")
+
+# Запись данных в CSV файл
+with open('orbit_data.csv', 'w', newline='') as csvfile:
+    fieldnames = ['Time (hours)', 'Radius (m)', 'Vr (m/s)', 'Vt (m/s)', 'V (m/s)']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+
+    for t, r_val, Vr_val, Vt_val, V_val in zip(time_intervals / 3600, r, Vr, Vt, V):
+        writer.writerow({
+            'Time (hours)': t,
+            'Radius (m)': r_val,
+            'Vr (m/s)': Vr_val,
+            'Vt (m/s)': Vt_val,
+            'V (m/s)': V_val
+        })
+
+print("Данные успешно записаны в 'orbit_data.csv'.")
 
 # Построение графиков
-
-# График аномалий
 plt.figure(figsize=(10, 6))
-plt.plot(time_values, M_values, label='Средняя аномалия M(t)', color='b')
-plt.plot(time_values, E_values, label='Эксцентрическая аномалия E(t)', color='g')
-plt.plot(time_values, An_values, label='Истинная аномалия An(t)', color='r')
-plt.xlabel('Время (секунды)')
-plt.ylabel('Аномалия (в долях π)')
+plt.plot(time_intervals / 3600, r, label='Радиус-вектор (м)')
+plt.title('Радиус-вектор объекта')
+plt.xlabel('Время (часы)')
+plt.ylabel('Радиус-вектор (м)')
+plt.grid(True)
 plt.legend()
-plt.title('Зависимость аномалий от времени')
-plt.grid(True)
 plt.show()
 
-# График радиуса
 plt.figure(figsize=(10, 6))
-plt.plot(time_values, r_values, label='Радиус r(t)', color='m')
-plt.xlabel('Время (секунды)')
-plt.ylabel('Радиус орбиты (км)')
-plt.title('Зависимость радиуса от времени')
-plt.grid(True)
-plt.show()
-
-# Графики скоростей
-plt.figure(figsize=(10, 6))
-plt.plot(time_values, Vr_values, label='Радиальная скорость Vr(t)', color='c')
-plt.plot(time_values, Vn_values, label='Тангенциальная скорость Vn(t)', color='y')
-plt.plot(time_values, V_values, label='Полная скорость V(t)', color='k')
-plt.xlabel('Время (секунды)')
+plt.plot(time_intervals / 3600, Vr / 1e3, label='Радиальная скорость (км/с)')
+plt.plot(time_intervals / 3600, Vt / 1e3, label='Трансверсальная скорость (км/с)')
+plt.plot(time_intervals / 3600, V / 1e3, label='Полная скорость (км/с)')
+plt.title('Скорости объекта')
+plt.xlabel('Время (часы)')
 plt.ylabel('Скорость (км/с)')
-plt.legend()
-plt.title('Зависимость скоростей от времени')
 plt.grid(True)
+plt.legend()
 plt.show()
